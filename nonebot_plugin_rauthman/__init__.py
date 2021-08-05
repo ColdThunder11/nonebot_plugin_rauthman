@@ -17,7 +17,7 @@ from loguru import logger
 from nonebot.adapters import Bot, Event
 
 config = nonebot.get_driver().config
-driver_type = nonebot.get_bots()[0].type
+driver_type = nonebot.get_bots()[nonebot.get_bots().keys()[0]].type
 
 if driver_type == "telegram":
     from nonebot.adapters.telegram.event import MessageEvent, PrivateMessageEvent, GroupMessageEvent
