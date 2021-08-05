@@ -15,12 +15,19 @@ from typing import Any, Dict, Optional
 import nonebot
 from loguru import logger
 from nonebot.adapters import Bot, Event
-from nonebot.adapters.cqhttp.event import (FriendAddNoticeEvent,
-                                           FriendRecallNoticeEvent,
-                                           FriendRequestEvent,
-                                           GroupMessageEvent, MessageEvent,
-                                           MetaEvent, NoticeEvent,
-                                           PrivateMessageEvent, RequestEvent)
+
+config = nonebot.get_driver().config
+driver_type = nonebot.get_bots()[0].type
+
+if driver_type == "telegram":
+    from nonebot.adapters.telegram.event import MessageEvent, PrivateMessageEvent, GroupMessageEvent
+elif driver_type == "cqhttp":
+    from nonebot.adapters.cqhttp.event import (FriendAddNoticeEvent,
+                                            FriendRecallNoticeEvent,
+                                            FriendRequestEvent,
+                                            GroupMessageEvent, MessageEvent,
+                                            MetaEvent, NoticeEvent,
+                                            PrivateMessageEvent, RequestEvent)
 from nonebot.exception import ActionFailed
 from nonebot.permission import Permission, SUPERUSER
 from nonebot.plugin import on_command
@@ -32,7 +39,7 @@ try:
 except ImportError:
     import json
 
-config = nonebot.get_driver().config
+
 
 
 def checkDir(dir: str) -> None:
@@ -383,33 +390,43 @@ def isInService(service: Optional[str] = None, level: Optional[int] = None) -> R
         available.append(service)
 
     async def _isInService(bot: Bot, event: Event, state: T_State) -> bool:
-        if isinstance(event, MessageEvent):
-            if isinstance(event, GroupMessageEvent):
-                if service and auth.policy == 0:
+        if driver_type == "cqhttp":
+            if isinstance(event, MessageEvent):
+                if isinstance(event, GroupMessageEvent):
+                    if service and auth.policy == 0:
+                        return auth.check(event.group_id, service)
+                    elif level and auth.policy == 1:
+                        return bool(auth.check(event.group_id) >= level)
+                else:
+                    return True
+            elif isinstance(event, NoticeEvent):
+                if isinstance(event, FriendAddNoticeEvent) or isinstance(event, FriendRecallNoticeEvent):
+                    return True
+                elif service and auth.policy == 0:
                     return auth.check(event.group_id, service)
                 elif level and auth.policy == 1:
                     return bool(auth.check(event.group_id) >= level)
+            elif isinstance(event, RequestEvent):
+                if isinstance(event, FriendRequestEvent):
+                    return True
+                elif service and auth.policy == 0:
+                    return auth.check(event.group_id, service)
+                elif level and auth.policy == 1:
+                    return bool(auth.check(event.group_id) >= level)
+            elif isinstance(event, MetaEvent):
+                return True
             else:
+                logger.warning('Not supported: nonebot_plugin_rauthman')
                 return True
-        elif isinstance(event, NoticeEvent):
-            if isinstance(event, FriendAddNoticeEvent) or isinstance(event, FriendRecallNoticeEvent):
-                return True
-            elif service and auth.policy == 0:
-                return auth.check(event.group_id, service)
-            elif level and auth.policy == 1:
-                return bool(auth.check(event.group_id) >= level)
-        elif isinstance(event, RequestEvent):
-            if isinstance(event, FriendRequestEvent):
-                return True
-            elif service and auth.policy == 0:
-                return auth.check(event.group_id, service)
-            elif level and auth.policy == 1:
-                return bool(auth.check(event.group_id) >= level)
-        elif isinstance(event, MetaEvent):
-            return True
-        else:
-            logger.warning('Not supported: nonebot_plugin_rauthman')
-            return True
+        elif driver_type == "telegram":
+            if isinstance(event, MessageEvent):
+                if isinstance(event, GroupMessageEvent) or isinstance(event, PrivateMessageEvent):
+                    if service and auth.policy == 0:
+                        return auth.check(event.group_id, service)
+                    elif level and auth.policy == 1:
+                        return bool(auth.check(event.group_id) >= level)
+                else:
+                    return True
     return Rule(_isInService)
 
 
